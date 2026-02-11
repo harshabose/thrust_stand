@@ -13,10 +13,19 @@ class StepperUpDown(StepperUp):
         threshold = THRUST_THRESHOLD
 
         if fabs(error) > threshold:
+            # Calculate thrust percentage
+            mixin_threshold = motor_target.target_thrust * (self._current_state.mixin_thrust_percent / 100.0)
+            
+            # Use mixin_pwm_step if below threshold, otherwise regular pwm_step
+            if motor_target.current_thrust < mixin_threshold:
+                step = self._current_state.mixin_pwm_step
+            else:
+                step = self._current_state.pwm_step
+            
             if error > 0 and motor_target.current_pwm < self._current_state.max_pwm_value:
-                return True, self._current_state.pwm_step
+                return True, step
             elif error < 0 and motor_target.current_pwm > self._current_state.min_pwm_value:
-                return True, -self._current_state.pwm_step
+                return True, -step
 
         return False, 0
 
@@ -27,16 +36,18 @@ async def main():
 
     # Configuration
     config = Config(
-        target_thrust=36_000.0,  # 2kg total
+        target_thrust=30_000.0,  # 2kg total
         selected_motors=[1, 2, 3, 4, 5, 6],  # Use motors 1,4
         pwm_step=2,  # 10µs per step
         max_pwm=MAX_PWM,
         min_pwm=MIN_PWM,
-        run_for=600,  # 60 seconds
+        mixin_pwm_step=50,
+        mixin_thrust_percent=75, # reach fast to 75% with mixin_pwm_step (otherwise pwm_step is too slow)
+        run_for=3900,  # 60 seconds
         use_method="stepper",
         pwm_write_frequency=1_000_000,  # 500 milliseconds in microseconds
-        mavlink_addr='/dev/cu.usbserial-0001',
-        mavlink_baudrate=57600,
+        mavlink_addr='udpin:0.0.0.0:14550',
+        mavlink_baudrate=115200,
         mavlink_read_frequency=1_000_000,  # 100ms
         arduino_port='/dev/cu.usbmodem1301',
         arduino_baudrate=9600,

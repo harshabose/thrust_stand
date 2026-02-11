@@ -36,7 +36,8 @@ class MavlinkConnection:
             print(f"Connecting to {self.__addr}...")
             self.master = mavutil.mavlink_connection(
                 device=self.__addr,
-                baud=self.__baudrate
+                baud=self.__baudrate,
+                input=True,
             )
 
             print("Waiting for heartbeat...")

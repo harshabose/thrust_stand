@@ -17,6 +17,8 @@ class StepperState:
     run_for: int                #seconds
     pwm_write_frequency: int    #microseconds
 
+    mixin_pwm_step:int = 50
+    mixin_thrust_percent:int = 80
     total_current_thrust: float = 0
     total_adjustment_count: int = 0
     running: bool = False
@@ -39,7 +41,6 @@ class MotorTarget:
     current_thrust: float = 0.0
     adjustments_count: int = 0
 
-
 class StepperUp:
     def __init__(self, config: Config, pwm_connection: PWMConnection, load_connection: LoadConnection):
         self.__pwm_connection: PWMConnection = pwm_connection
@@ -52,6 +53,8 @@ class StepperUp:
             selected_motors=config.selected_motors,
             max_pwm_value=config.max_pwm,
             min_pwm_value=config.min_pwm,
+            mixin_pwm_step=config.mixin_pwm_step,
+            mixin_thrust_percent=config.mixin_thrust_percent,
             pwm_step=config.pwm_step,
             run_for=config.run_for,
             pwm_write_frequency=config.pwm_write_frequency,
@@ -110,9 +113,18 @@ class StepperUp:
         threshold = THRUST_THRESHOLD
 
         if error > threshold:
+            # Calculate thrust percentage
+            mixin_threshold = motor_target.target_thrust * (self._current_state.mixin_thrust_percent / 100.0)
+            
+            # Use mixin_pwm_step if below threshold, otherwise regular pwm_step
+            if motor_target.current_thrust < mixin_threshold:
+                step = self._current_state.mixin_pwm_step
+            else:
+                step = self._current_state.pwm_step
+            
             # Check PWM limits
             if motor_target.current_pwm < self._current_state.max_pwm_value:
-                return True, self._current_state.pwm_step
+                return True, step
 
         return False, 0
 

@@ -6,9 +6,11 @@ from dataclasses import dataclass
 class Config:
     target_thrust: float
     selected_motors: list[int]  # Changed to list for multiple motor selection
-    pwm_step: int
     max_pwm: int
     min_pwm: int
+    pwm_step: int
+    mixin_pwm_step: int
+    mixin_thrust_percent: int
 
     run_for: int  # seconds
     use_method: str
@@ -42,7 +44,7 @@ def MOTOR_NUM(motor_str: str) -> int:
 
 MIN_PWM: int = 1150
 MAX_PWM: int = 1800
-THRUST_THRESHOLD: int = 15
+THRUST_THRESHOLD: int = 30
 
 @dataclass
 class MotorState:
