@@ -1,6 +1,10 @@
 import asyncio
+import csv
+import os
+from datetime import datetime
 from typing import Optional, Dict, List, Callable
-from config import MotorState, MIN_PWM, MOTOR_STR
+from config import MotorState, MIN_PWM, MOTOR_STR, LoadCellReading
+from load.load import LoadConnection
 
 from mavlink import MavlinkConnection
 
@@ -134,10 +138,10 @@ class PWMConnection:
         if not self.__connection.master:
             raise RuntimeError("Not connected")
 
-        if not (1 <= _motor_num <= self.__num_motors):
-            raise ValueError(f"Invalid motor number: {_motor_num}")
+        # if not (1 <= _motor_num <= self.__num_motors):
+        #     raise ValueError(f"Invalid motor number: {_motor_num}")
 
-        self.__connection.master.set_servo(_motor_num, pwm_value)
+        self.__connection.master.set_servo(_motor_num, pwm_value) # servo 9 is motor 1; servo 10 is motor 2 etc
 
         # message = self.__master.mav.command_long_encode(
         #     self.__master.target_system,  # Target system (usually 1)
@@ -205,7 +209,7 @@ async def main():
 
 
 async def main2():
-    connection = MavlinkConnection(addr="udpin:10.106.216.178:14550", baudrate=115200)
+    connection = MavlinkConnection(addr="udpin:192.168.43.153:14550", baudrate=115200)
 
     # Create MAVLink instance
     mav = PWMConnection(connection=connection, num_motors=6)
@@ -238,9 +242,9 @@ async def main2():
 
         # Example: Ramp up motor 1
         print("\n=== Ramping up Motor 1 ===")
-        for pwm in range(MIN_PWM, 1300, 50):
+        for pwm in range(MIN_PWM, 1300, 100):
             print("stepping into ", pwm)
-            mav.set_motor_pwm(1, pwm)
+            mav.set_motor_pwm(4, pwm)
             # mav.set_motor_pwm(4, pwm)
             await asyncio.sleep(5)
 
@@ -262,5 +266,116 @@ async def main2():
         await connection.stop_monitoring()
         connection.disconnect()
 
+async def main3():
+    # Configuration inputs
+    limit_a, limit_b, duration, resolution, max_cycles = 1440, 1500, 2, 10, 1150
+    num_motors = 4
+    
+    # Initialize connections
+    mav_connection = MavlinkConnection(addr="udpin:192.168.43.153:14550", baudrate=115200)
+    pwm_conn = PWMConnection(connection=mav_connection, num_motors=num_motors)
+    
+    load_conn = LoadConnection(port='/dev/tty.usbmodem1123101', baudrate=9600)
+    
+    if not mav_connection.connect():
+        print("Failed to connect to MAVLink!")
+        return
+
+    if not await load_conn.connect(read_frequency=100_000):
+        print("Failed to connect to Load Cell!")
+        mav_connection.disconnect()
+        return
+
+    csv_filename = "all_motors_thrust_data.csv"
+    
+    try:
+        await mav_connection.start_monitoring()
+        # Start load monitoring in background
+        load_task = asyncio.create_task(load_conn.start_monitoring(display_mode='silent'))
+        
+        # Tare
+        print("Waiting 5s for stability then taring...")
+        await asyncio.sleep(5)
+        load_conn.tare()
+        await asyncio.sleep(1)
+
+        with open(csv_filename, mode='w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            
+            # Header: PWM, M1_Thrust, M2_Thrust, ..., M6_Thrust, Timestamp
+            header = ['PWM'] + [f'M{i}_Thrust(g)' for i in range(1, num_motors + 1)] + ['Timestamp']
+            csv_writer.writerow(header)
+
+            for cycle in range(max_cycles):
+                print(f"\n--- Starting Cycle {cycle + 1}/{max_cycles} ---")
+                
+                # Determine forward and backward steps
+                step = resolution if limit_b > limit_a else -resolution
+                
+                # Forward: limit_a -> limit_b
+                pwms_forward = list(range(limit_a, limit_b + (1 if step > 0 else -1), step))
+                if not pwms_forward or pwms_forward[-1] != limit_b:
+                    pwms_forward.append(limit_b)
+                
+                # Backward: limit_b -> limit_a
+                pwms_backward = list(range(limit_b, limit_a - (1 if step > 0 else -1), -step))
+                if not pwms_backward or pwms_backward[-1] != limit_a:
+                    pwms_backward.append(limit_a)
+                
+                # Combine: Forward + Backward (avoiding duplicating limit_b)
+                pwms = pwms_forward + pwms_backward[1:]
+
+                for pwm in pwms:
+                    print(f"Setting all motors PWM to {pwm}")
+                    pwm_conn.set_all_motors_pwm(pwm)
+                    
+                    # Wait for duration and collect thrust
+                    await asyncio.sleep(duration)
+                    
+                    reading = await load_conn.get_current_readings()
+                    
+                    row = [pwm]
+                    thrust_values = []
+                    for motor_idx in range(1, num_motors + 1):
+                        thrust = reading.thrust_readings.get(MOTOR_STR(motor_idx), 0)
+                        row.append(thrust)
+                        thrust_values.append(f"M{motor_idx}: {thrust}g")
+                    
+                    row.append(datetime.now().isoformat())
+                    
+                    print(f"PWM: {pwm} | " + " | ".join(thrust_values))
+                    csv_writer.writerow(row)
+                    csvfile.flush() # Ensure data is saved frequently
+                
+                # Cycle limiter: Empty row or specific marker
+                csv_writer.writerow([]) # Empty line as limiter
+                csv_writer.writerow([f"--- End of Cycle {cycle + 1} ---"])
+                csv_writer.writerow([])
+                csvfile.flush()
+
+                # Optional: Brief pause or reset between cycles
+                print(f"Cycle {cycle + 1} complete. Resetting motors...")
+                # pwm_conn.set_all_motors_pwm(1000)
+                # await asyncio.sleep(2)
+                
+        print(f"\nTest completed successfully. Data saved to {csv_filename}")
+
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        print("\n\nInterrupted! Stopping all motors and saving files...")
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+    finally:
+        # Emergency stop
+        pwm_conn.set_all_motors_pwm(1000)
+        
+        await asyncio.sleep(0.5)
+        
+        load_conn.stop_monitoring()
+        await mav_connection.stop_monitoring()
+        
+        load_conn.disconnect()
+        mav_connection.disconnect()
+        print("Cleanup complete. All motors set to 1000.")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main3())

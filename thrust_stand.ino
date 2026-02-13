@@ -53,12 +53,12 @@ void loop()
 
     total = load1 + load2 + load3 + load4 + load5 + load6;
 
-    Serial.println(String("MOTOR-1: ")+load1+String("; ")+
-                   String("MOTOR-2: ")+load4+String("; ") +
-                   String("MOTOR-3: ")+load5+String("; ") +
-                   String("MOTOR-4: ")+load2+String("; ") + 
-                   String("MOTOR-5: ")+load6+String("; ") +
-                   String("MOTOR-6: ")+load3+String("; ") + 
+    Serial.println(String("MOTOR-1: ")+load5+String("; ") +
+                   String("MOTOR-2: ")+load3+String("; ") + 
+                   String("MOTOR-3: ")+load2+String("; ") + 
+                   String("MOTOR-4: ")+load6+String("; ") +
+                   String("MOTOR-6: ")+load1+String("; ")+
+                   String("MOTOR-5: ")+load4+String("; ") +
                    String("TOTOAL: ")+total);
     
   } 

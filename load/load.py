@@ -105,6 +105,7 @@ class LoadConnection:
             #         filtered, state = signal.sosfilt(self.__lp_filter[int(motor_num) - 1], [int(value)], zi=self.__lp_filter_state[int(motor_num) - 1])
             #         self.__lp_filter_state[int(motor_num) - 1] = state
             #         value = str(int(filtered[0]))
+
             self.__motor_values[MOTOR_STR(motor_num)] = int(value)
             total += int(value)
 
@@ -167,7 +168,21 @@ class LoadConnection:
                     # Process only the most recent line
                     if lines:
                         latest_line = lines[-1]
-                        print(latest_line)
+                        # Format output for alignment
+                        parts = re.findall(r'(MOTOR-\d+):\s*(-?\d+)', latest_line)
+                        if parts:
+                            # Right-align values to 4 characters for consistent spacing
+                            formatted_parts = [f"{k}: {v:>4}" for k, v in parts]
+
+                            # Handle TOTAL/TOTOAL field
+                            total_match = re.search(r'(TOTO?AL):\s*(-?\d+)', latest_line)
+                            if total_match:
+                                formatted_parts.append(f"TOTAL: {total_match.group(2):>5}")
+
+                            print("; ".join(formatted_parts))
+                        else:
+                            print(latest_line)
+
                         await self.parse_line(latest_line)
 
                 await asyncio.sleep(read_interval)
@@ -253,7 +268,7 @@ class LoadConnection:
 
 
 async def main():
-    monitor = LoadConnection(port='/dev/cu.usbmodem11301', baudrate=9600)
+    monitor = LoadConnection(port='/dev/tty.usbmodem1123101', baudrate=9600)
 
     if not await monitor.connect(read_frequency=100_000):
         print("Failed to connect!")
@@ -266,7 +281,7 @@ async def main():
         monitor.tare()
         await asyncio.sleep(0.5)
 
-        await monitor.start_monitoring(display_mode='update')
+        await monitor.start_monitoring(display_mode='continuous')
 
     except KeyboardInterrupt:
         print("\n\nStopped by user")

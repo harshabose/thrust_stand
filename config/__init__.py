@@ -42,7 +42,7 @@ def MOTOR_NUM(motor_str: str) -> int:
     """Extract motor number from motor string (e.g., 'MOTOR-1' -> 1)"""
     return int(motor_str.split('-')[1])
 
-MIN_PWM: int = 1150
+MIN_PWM: int = 1100
 MAX_PWM: int = 1800
 THRUST_THRESHOLD: int = 30
 

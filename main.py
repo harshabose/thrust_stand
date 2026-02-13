@@ -10,8 +10,8 @@ async def main():
 
     # Hardware configuration
     hardware_config = Config(
-        target_thrust=18000.0,
-        selected_motors=[1, 4, 6],
+        target_thrust=3000.0,
+        selected_motors=[1,],
         pwm_step=2,
         max_pwm=MAX_PWM,
         min_pwm=MIN_PWM,
@@ -20,7 +20,7 @@ async def main():
         run_for=2400,
         use_method="stepper",
         pwm_write_frequency=1_000_000,
-        mavlink_addr='/dev/tty.usbmodem11301',
+        mavlink_addr='udpin:192.168.43.153:14550',
         mavlink_baudrate=115200,
         mavlink_read_frequency=1_000_000,
         arduino_port='/dev/cu.usbmodem11301',

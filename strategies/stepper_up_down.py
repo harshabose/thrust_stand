@@ -36,20 +36,20 @@ async def main():
 
     # Configuration
     config = Config(
-        target_thrust=30_000.0,  # 2kg total
-        selected_motors=[1, 2, 3, 4, 5, 6],  # Use motors 1,4
+        target_thrust=14000.0,  # 2kg total
+        selected_motors=[1, 2, 3, 4],  # Use motors 1,4
         pwm_step=2,  # 10µs per step
         max_pwm=MAX_PWM,
         min_pwm=MIN_PWM,
-        mixin_pwm_step=50,
+        mixin_pwm_step=25,
         mixin_thrust_percent=75, # reach fast to 75% with mixin_pwm_step (otherwise pwm_step is too slow)
-        run_for=3900,  # 60 seconds
+        run_for=3000,  # 60 seconds
         use_method="stepper",
         pwm_write_frequency=1_000_000,  # 500 milliseconds in microseconds
-        mavlink_addr='udpin:0.0.0.0:14550',
+        mavlink_addr='udpin:192.168.43.153:14550',
         mavlink_baudrate=115200,
         mavlink_read_frequency=1_000_000,  # 100ms
-        arduino_port='/dev/cu.usbmodem1301',
+        arduino_port='/dev/tty.usbmodem1123101',
         arduino_baudrate=9600,
         arduino_read_frequency=100_000,  # 500ms
         csv_path="",
@@ -100,7 +100,7 @@ async def main():
         asyncio.create_task(load.start_monitoring(display_mode='continuous'))
 
         # Create and run the strategy
-        strategy = StepperUpDown(config, pwm, AverageLoadConnection(load, 10))
+        strategy = StepperUpDown(config, pwm, load)
         await strategy.run()
     finally:
         # Cleanup
